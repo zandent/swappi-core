@@ -9,7 +9,7 @@ import "./interfaces/IERC20.sol";
 import "./interfaces/ISwappiFactory.sol";
 import "./interfaces/ISwappiCallee.sol";
 
-contract SwappiPair is ISwappiPair, SwappiERC20 {
+contract SwappiPairStable is ISwappiPair, SwappiERC20 {
     using SafeMath for uint256;
     using UQ112x112 for uint224;
 
@@ -119,6 +119,12 @@ contract SwappiPair is ISwappiPair, SwappiERC20 {
         blockTimestampLast = blockTimestamp;
         emit Sync(reserve0, reserve1);
     }
+    // formula of k
+    function _k(uint256 x, uint256 y) internal pure returns (uint) {
+        uint _a = x.mul(y).div(1e18);
+        uint _b = x.mul(x).div(1e18).add(y.mul(y).div(1e18));
+        return _a.mul(_b).div(1e18);  // x3y+y3x >= k
+    }
 
     // if fee is on, mint liquidity equivalent to 8/25 of the growth in sqrt(k)
     function _mintFee(uint112 _reserve0, uint112 _reserve1)
@@ -168,7 +174,7 @@ contract SwappiPair is ISwappiPair, SwappiERC20 {
         _mint(to, liquidity);
 
         _update(balance0, balance1, _reserve0, _reserve1);
-        if (feeOn) kLast = uint256(reserve0).mul(reserve1); // reserve0 and reserve1 are up-to-date
+        if (feeOn) kLast = _k(uint256(reserve0), uint256(reserve1)); // reserve0 and reserve1 are up-to-date
         emit Mint(msg.sender, amount0, amount1);
     }
 
@@ -255,12 +261,17 @@ contract SwappiPair is ISwappiPair, SwappiERC20 {
         {
             // scope for reserve{0,1}Adjusted, avoids stack too deep errors
             uint256 balance0Adjusted =
-                (balance0.mul(10000).sub(amount0In.mul(25)));
+                (balance0.mul(10000).sub(amount0In.mul(3)));
             uint256 balance1Adjusted =
-                (balance1.mul(10000).sub(amount1In.mul(25)));
+                (balance1.mul(10000).sub(amount1In.mul(3)));
+            // require(
+            //     balance0Adjusted.mul(balance1Adjusted) >=
+            //         uint256(_reserve0).mul(_reserve1).mul(10000**2),
+            //     "Swappi: K"
+            // );
             require(
-                balance0Adjusted.mul(balance1Adjusted) >=
-                    uint256(_reserve0).mul(_reserve1).mul(10000**2),
+                _k(balance0Adjusted, balance1Adjusted) >=
+                    _k(uint256(_reserve0).mul(10000),uint256(_reserve1).mul(10000)),
                 "Swappi: K"
             );
         }

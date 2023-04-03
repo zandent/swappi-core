@@ -3,8 +3,8 @@ pragma solidity =0.5.16;
 import './interfaces/ISwappiFactory.sol';
 import './SwappiPair.sol';
 
-contract SwappiFactory is ISwappiFactory {
-    bytes32 public constant INIT_CODE_PAIR_HASH = keccak256(abi.encodePacked(type(SwappiPair).creationCode));
+contract SwappiFactoryStable is ISwappiFactory {
+    bytes32 public constant INIT_CODE_PAIR_HASH = keccak256(abi.encodePacked(type(SwappiPairStable).creationCode));
 
     address public feeTo;
     address public feeToSetter;
@@ -27,7 +27,7 @@ contract SwappiFactory is ISwappiFactory {
         (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
         require(token0 != address(0), 'Swappi: ZERO_ADDRESS');
         require(getPair[token0][token1] == address(0), 'Swappi: PAIR_EXISTS'); // single check is sufficient
-        bytes memory bytecode = type(SwappiPair).creationCode;
+        bytes memory bytecode = type(SwappiPairStable).creationCode;
         bytes32 salt = keccak256(abi.encodePacked(token0, token1));
         assembly {
             pair := create2(0, add(bytecode, 32), mload(bytecode), salt)
