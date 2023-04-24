@@ -60,5 +60,5 @@ interface ISwappiPair {
     function skim(address to) external;
     function sync() external;
 
-    function initialize(address, address, uint256[2] calldata) external;
+    function initialize(address, address, uint256[2] calldata, address) external;
 }

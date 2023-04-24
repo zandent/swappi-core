@@ -54,6 +54,11 @@ contract SwappiPairWeighted is ISwappiPair, SwappiERC20 {
         uint256 amount;
         bytes userData;
     }
+    address public vault;
+    modifier onlyVault() {
+        require(msg.sender == vault, "Errors.CALLER_NOT_VAULT");
+        _;
+    }
     // #############Weighted###########
     modifier lock() {
         require(unlocked == 1, "Swappi: LOCKED");
@@ -111,7 +116,7 @@ contract SwappiPairWeighted is ISwappiPair, SwappiERC20 {
     }
 
     // called once by the factory at time of deployment
-    function initialize(address _token0, address _token1, uint256[2] calldata normalizedWeights) external {
+    function initialize(address _token0, address _token1, uint256[2] calldata normalizedWeights, address _vault) external {
         require(msg.sender == factory, "Swappi: FORBIDDEN"); // sufficient check
         // Ensure each normalized weight is above the minimum
         uint256 normalizedSum = 0;
@@ -130,6 +135,7 @@ contract SwappiPairWeighted is ISwappiPair, SwappiERC20 {
         _scalingFactor1 = _computeScalingFactor(IERC20(_token1));
         _normalizedWeight0 = normalizedWeights[0];
         _normalizedWeight1 = normalizedWeights[1];
+        vault = _vault;
     }
     
     // Scaling
@@ -469,7 +475,7 @@ contract SwappiPairWeighted is ISwappiPair, SwappiERC20 {
         uint256[] calldata balances,
         uint256[] calldata userAmountsIn,
         uint256 bptMinOrExact
-    ) external lock returns (uint256[] memory, uint256[] memory) {
+    ) external lock onlyVault returns (uint256[] memory, uint256[] memory) {
         // _beforeSwapJoinExit();
 
         uint256[] memory scalingFactors = _scalingFactors();
@@ -728,7 +734,7 @@ contract SwappiPairWeighted is ISwappiPair, SwappiERC20 {
         uint256[] calldata balances,
         uint256 bptAmountInExact,
         uint256 tokenIndex
-    ) external lock returns (uint256[] memory, uint256[] memory) {
+    ) external lock onlyVault returns (uint256[] memory, uint256[] memory) {
         uint256[] memory amountsOut;
         uint256 bptAmountIn;
 
@@ -879,7 +885,7 @@ contract SwappiPairWeighted is ISwappiPair, SwappiERC20 {
         SwapRequest memory request,
         uint256 balanceTokenIn,
         uint256 balanceTokenOut
-    ) public returns (uint256) {
+    ) public lock onlyVault returns (uint256) {
         // _beforeSwapJoinExit();
 
         uint256 scalingFactorTokenIn = _scalingFactor(request.tokenIn);
