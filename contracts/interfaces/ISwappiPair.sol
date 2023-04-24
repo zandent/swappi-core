@@ -41,12 +41,24 @@ interface ISwappiPair {
     function price0CumulativeLast() external view returns (uint);
     function price1CumulativeLast() external view returns (uint);
     function kLast() external view returns (uint);
-
-    function mint(address to) external returns (uint liquidity);
-    function burn(address to) external returns (uint amount0, uint amount1);
+    // ###################V2 mint is deleted####################
+    // function mint(address to) external returns (uint liquidity);
+    function onJoinPool(
+        address recipient,
+        uint256[] calldata balances,
+        uint256[] calldata userAmountsIn,
+        uint256 bptMinOrExact
+    ) external returns (uint256[] memory, uint256[] memory);
+    function onExitPool(
+        address sender,
+        uint256[] calldata balances,
+        uint256 bptAmountInExact,
+        uint256 tokenIndex
+    ) external returns (uint256[] memory, uint256[] memory);
+    // function burn(address to) external returns (uint amount0, uint amount1);
     function swap(uint amount0Out, uint amount1Out, address to, bytes calldata data) external;
     function skim(address to) external;
     function sync() external;
 
-    function initialize(address, address) external;
+    function initialize(address, address, uint256[2] calldata) external;
 }

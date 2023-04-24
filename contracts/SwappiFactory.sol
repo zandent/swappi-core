@@ -4,7 +4,7 @@ import './interfaces/ISwappiFactory.sol';
 import './SwappiPair.sol';
 
 contract SwappiFactoryStable is ISwappiFactory {
-    bytes32 public constant INIT_CODE_PAIR_HASH = keccak256(abi.encodePacked(type(SwappiPairStable).creationCode));
+    bytes32 public constant INIT_CODE_PAIR_HASH = keccak256(abi.encodePacked(type(SwappiPairWeighted).creationCode));
 
     address public feeTo;
     address public feeToSetter;
@@ -22,17 +22,17 @@ contract SwappiFactoryStable is ISwappiFactory {
         return allPairs.length;
     }
 
-    function createPair(address tokenA, address tokenB) external returns (address pair) {
+    function createPair(address tokenA, address tokenB, uint256[2] calldata normalizedWeights) external returns (address pair) {
         require(tokenA != tokenB, 'Swappi: IDENTICAL_ADDRESSES');
         (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
         require(token0 != address(0), 'Swappi: ZERO_ADDRESS');
         require(getPair[token0][token1] == address(0), 'Swappi: PAIR_EXISTS'); // single check is sufficient
-        bytes memory bytecode = type(SwappiPairStable).creationCode;
+        bytes memory bytecode = type(SwappiPairWeighted).creationCode;
         bytes32 salt = keccak256(abi.encodePacked(token0, token1));
         assembly {
             pair := create2(0, add(bytecode, 32), mload(bytecode), salt)
         }
-        ISwappiPair(pair).initialize(token0, token1);
+        ISwappiPair(pair).initialize(token0, token1, normalizedWeights);
         getPair[token0][token1] = pair;
         getPair[token1][token0] = pair; // populate mapping in the reverse direction
         allPairs.push(pair);
