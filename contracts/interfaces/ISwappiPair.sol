@@ -48,15 +48,40 @@ interface ISwappiPair {
         uint256[] calldata balances,
         uint256[] calldata userAmountsIn,
         uint256 bptMinOrExact
-    ) external returns (uint256[] memory, uint256[] memory);
+    ) external returns (uint256[] memory, uint256);
     function onExitPool(
         address sender,
         uint256[] calldata balances,
         uint256 bptAmountInExact,
         uint256 tokenIndex
-    ) external returns (uint256[] memory, uint256[] memory);
+    ) external returns (uint256, uint256);
     // function burn(address to) external returns (uint amount0, uint amount1);
-    function swap(uint amount0Out, uint amount1Out, address to, bytes calldata data) external;
+    function onSwapGivenIn(
+        address tokenIn,
+        address tokenOut,
+        uint256 amount,
+        uint256 currentBalanceTokenIn,
+        uint256 currentBalanceTokenOut
+    ) external view returns (uint256);
+
+    function onSwapGivenOut(
+        address tokenIn,
+        address tokenOut,
+        uint256 amount,
+        uint256 currentBalanceTokenIn,
+        uint256 currentBalanceTokenOut
+    ) external view returns (uint256);
+
+    function onSwap(
+        bool isGivenIn,
+        address tokenIn,
+        address tokenOut,
+        uint256 amount,
+        uint256 balanceTokenIn,
+        uint256 balanceTokenOut,
+        address receipt
+    ) external returns (uint256);
+    // function swap(uint amount0Out, uint amount1Out, address to, bytes calldata data) external;
     function skim(address to) external;
     function sync() external;
 

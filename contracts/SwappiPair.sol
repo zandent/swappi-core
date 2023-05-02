@@ -49,8 +49,8 @@ contract SwappiPairWeighted is ISwappiPair, SwappiERC20 {
     uint256 public postJoinExitInvariant; // use this instead of kLast
     struct SwapRequest {
         bool isGivenIn;
-        IERC20 tokenIn;
-        IERC20 tokenOut;
+        address tokenIn;
+        address tokenOut;
         uint256 amount;
         bytes userData;
     }
@@ -76,8 +76,8 @@ contract SwappiPairWeighted is ISwappiPair, SwappiERC20 {
             uint32 _blockTimestampLast
         )
     {
-        _reserve0 = reserve0;
-        _reserve1 = reserve1;
+        _reserve0 = uint112(IERC20(token0).balanceOf(address(this)));
+        _reserve1 = uint112(IERC20(token1).balanceOf(address(this)));
         _blockTimestampLast = blockTimestampLast;
     }
 
@@ -475,7 +475,7 @@ contract SwappiPairWeighted is ISwappiPair, SwappiERC20 {
         uint256[] calldata balances,
         uint256[] calldata userAmountsIn,
         uint256 bptMinOrExact
-    ) external lock onlyVault returns (uint256[] memory, uint256[] memory) {
+    ) external lock onlyVault returns (uint256[] memory, uint256) {
         // _beforeSwapJoinExit();
 
         uint256[] memory scalingFactors = _scalingFactors();
@@ -496,7 +496,7 @@ contract SwappiPairWeighted is ISwappiPair, SwappiERC20 {
             // amountsIn are amounts entering the Pool, so we round up.
             _downscaleUpArray(amountsIn, scalingFactors);
 
-            return (amountsIn, new uint256[](balances.length));
+            return (amountsIn, bptAmountOut - MINIMUM_LIQUIDITY);
         } else {
             _upscaleArray(balances, scalingFactors);
             (uint256 bptAmountOut, uint256[] memory amountsIn) = _onJoinPool(
@@ -514,7 +514,7 @@ contract SwappiPairWeighted is ISwappiPair, SwappiERC20 {
             _downscaleUpArray(amountsIn, scalingFactors);
 
             // This Pool ignores the `dueProtocolFees` return value, so we simply return a zeroed-out array.
-            return (amountsIn, new uint256[](balances.length));
+            return (amountsIn, bptAmountOut);
         }
     }
     // update reserves and, on the first call per block, price accumulators
@@ -706,7 +706,7 @@ contract SwappiPairWeighted is ISwappiPair, SwappiERC20 {
 
         (uint256 preJoinExitSupply, uint256 preJoinExitInvariant) = _beforeJoinExit(balances, normalizedWeights);
 
-        (uint256 bptAmountIn, uint256[] memory amountsOut) = _doExit(
+        (uint256 actualBptAmountIn, uint256[] memory amountsOut) = _doExit(
             balances,
             normalizedWeights,
             preJoinExitSupply,
@@ -720,10 +720,10 @@ contract SwappiPairWeighted is ISwappiPair, SwappiERC20 {
             amountsOut,
             normalizedWeights,
             preJoinExitSupply,
-            preJoinExitSupply.sub(bptAmountIn)
+            preJoinExitSupply.sub(actualBptAmountIn)
         );
 
-        return (bptAmountIn, amountsOut);
+        return (actualBptAmountIn, amountsOut);
     }
     /**
      * @notice Vault hook for removing liquidity from a pool.
@@ -734,7 +734,7 @@ contract SwappiPairWeighted is ISwappiPair, SwappiERC20 {
         uint256[] calldata balances,
         uint256 bptAmountInExact,
         uint256 tokenIndex
-    ) external lock onlyVault returns (uint256[] memory, uint256[] memory) {
+    ) external lock onlyVault returns (uint256, uint256) {
         uint256[] memory amountsOut;
         uint256 bptAmountIn;
 
@@ -754,8 +754,12 @@ contract SwappiPairWeighted is ISwappiPair, SwappiERC20 {
 
         _burn(sender, bptAmountIn);
 
+        // transfer token to vault
+        IERC20(token0).transfer(vault, amountsOut[0]);
+        IERC20(token1).transfer(vault, amountsOut[1]);
+
         // This Pool ignores the `dueProtocolFees` return value, so we simply return a zeroed-out array.
-        return (amountsOut, new uint256[](balances.length));
+        return (amountsOut[0], amountsOut[1]);
     }
     // // this low-level function should be called from a contract which performs important safety checks
     // function burn(address to)
@@ -851,142 +855,186 @@ contract SwappiPairWeighted is ISwappiPair, SwappiERC20 {
     // Swap
 
     function _onSwapGivenIn(
-        SwapRequest memory swapRequest,
+        address tokenIn,
+        address tokenOut,
+        uint256 amount,
         uint256 currentBalanceTokenIn,
         uint256 currentBalanceTokenOut
     ) internal view returns (uint256) {
         return
             WeightedMath._calcOutGivenIn(
                 currentBalanceTokenIn,
-                _getNormalizedWeight(swapRequest.tokenIn),
+                _getNormalizedWeight(IERC20(tokenIn)),
                 currentBalanceTokenOut,
-                _getNormalizedWeight(swapRequest.tokenOut),
-                swapRequest.amount
+                _getNormalizedWeight(IERC20(tokenOut)),
+                amount
             );
     }
 
     function _onSwapGivenOut(
-        SwapRequest memory swapRequest,
+        address tokenIn,
+        address tokenOut,
+        uint256 amount,
         uint256 currentBalanceTokenIn,
         uint256 currentBalanceTokenOut
     ) internal view returns (uint256) {
         return
             WeightedMath._calcInGivenOut(
                 currentBalanceTokenIn,
-                _getNormalizedWeight(swapRequest.tokenIn),
+                _getNormalizedWeight(IERC20(tokenIn)),
                 currentBalanceTokenOut,
-                _getNormalizedWeight(swapRequest.tokenOut),
-                swapRequest.amount
+                _getNormalizedWeight(IERC20(tokenOut)),
+                amount
             );
     }    
+    function onSwapGivenIn(
+        address tokenIn,
+        address tokenOut,
+        uint256 amount,
+        uint256 currentBalanceTokenIn,
+        uint256 currentBalanceTokenOut
+    ) external view returns (uint256) {
+        return _onSwapGivenIn(
+            tokenIn,
+            tokenOut,
+            amount,
+            currentBalanceTokenIn,
+            currentBalanceTokenOut
+        );
+    }
+
+    function onSwapGivenOut(
+        address tokenIn,
+        address tokenOut,
+        uint256 amount,
+        uint256 currentBalanceTokenIn,
+        uint256 currentBalanceTokenOut
+    ) external view returns (uint256) {
+        return _onSwapGivenOut(
+            tokenIn,
+            tokenOut,
+            amount,
+            currentBalanceTokenIn,
+            currentBalanceTokenOut
+        );
+    }
     // Swap Hooks
 
     function onSwap(
-        SwapRequest memory request,
+        bool isGivenIn,
+        address tokenIn,
+        address tokenOut,
+        uint256 amount,
         uint256 balanceTokenIn,
-        uint256 balanceTokenOut
-    ) public lock onlyVault returns (uint256) {
+        uint256 balanceTokenOut,
+        address receipt
+    ) external lock onlyVault returns (uint256) {
         // _beforeSwapJoinExit();
 
-        uint256 scalingFactorTokenIn = _scalingFactor(request.tokenIn);
-        uint256 scalingFactorTokenOut = _scalingFactor(request.tokenOut);
+        uint256 scalingFactorTokenIn = _scalingFactor(IERC20(tokenIn));
+        uint256 scalingFactorTokenOut = _scalingFactor(IERC20(tokenOut));
 
         balanceTokenIn = _upscale(balanceTokenIn, scalingFactorTokenIn);
         balanceTokenOut = _upscale(balanceTokenOut, scalingFactorTokenOut);
 
-        if (request.isGivenIn) {
+        if (isGivenIn) {
             // Fees are subtracted before scaling, to reduce the complexity of the rounding direction analysis.
-            request.amount = _subtractSwapFeeAmount(request.amount);
+            amount = _subtractSwapFeeAmount(amount);
 
             // All token amounts are upscaled.
-            request.amount = _upscale(request.amount, scalingFactorTokenIn);
+            amount = _upscale(amount, scalingFactorTokenIn);
 
-            uint256 amountOut = _onSwapGivenIn(request, balanceTokenIn, balanceTokenOut);
+            uint256 amountOut = _onSwapGivenIn(tokenIn, tokenOut, amount, balanceTokenIn, balanceTokenOut);
 
+            uint256 roundDownAmountOut = _downscaleDown(amountOut, scalingFactorTokenOut);
+
+            IERC20(tokenOut).transfer(receipt, roundDownAmountOut);
             // amountOut tokens are exiting the Pool, so we round down.
-            return _downscaleDown(amountOut, scalingFactorTokenOut);
+            return roundDownAmountOut;
         } else {
             // All token amounts are upscaled.
-            request.amount = _upscale(request.amount, scalingFactorTokenOut);
+            uint256 roundUpAmount = _upscale(amount, scalingFactorTokenOut);
 
-            uint256 amountIn = _onSwapGivenOut(request, balanceTokenIn, balanceTokenOut);
+            uint256 amountIn = _onSwapGivenOut(tokenIn, tokenOut, roundUpAmount, balanceTokenIn, balanceTokenOut);
 
             // amountIn tokens are entering the Pool, so we round up.
             amountIn = _downscaleUp(amountIn, scalingFactorTokenIn);
+
+            IERC20(tokenOut).transfer(receipt, roundUpAmount);
 
             // Fees are added after scaling happens, to reduce the complexity of the rounding direction analysis.
             return _addSwapFeeAmount(amountIn);
         }
     }
-    // this low-level function should be called from a contract which performs important safety checks
-    function swap(
-        uint256 amount0Out,
-        uint256 amount1Out,
-        address to,
-        bytes calldata data
-    ) external lock {
-        require(
-            amount0Out > 0 || amount1Out > 0,
-            "Swappi: INSUFFICIENT_OUTPUT_AMOUNT"
-        );
-        (uint112 _reserve0, uint112 _reserve1, ) = getReserves(); // gas savings
-        require(
-            amount0Out < _reserve0 && amount1Out < _reserve1,
-            "Swappi: INSUFFICIENT_LIQUIDITY"
-        );
+    // // this low-level function should be called from a contract which performs important safety checks
+    // function swap(
+    //     uint256 amount0Out,
+    //     uint256 amount1Out,
+    //     address to,
+    //     bytes calldata data
+    // ) external lock {
+    //     require(
+    //         amount0Out > 0 || amount1Out > 0,
+    //         "Swappi: INSUFFICIENT_OUTPUT_AMOUNT"
+    //     );
+    //     (uint112 _reserve0, uint112 _reserve1, ) = getReserves(); // gas savings
+    //     require(
+    //         amount0Out < _reserve0 && amount1Out < _reserve1,
+    //         "Swappi: INSUFFICIENT_LIQUIDITY"
+    //     );
 
-        uint256 balance0;
-        uint256 balance1;
-        {
-            // scope for _token{0,1}, avoids stack too deep errors
-            address _token0 = token0;
-            address _token1 = token1;
-            require(to != _token0 && to != _token1, "Swappi: INVALID_TO");
-            if (amount0Out > 0) _safeTransfer(_token0, to, amount0Out); // optimistically transfer tokens
-            if (amount1Out > 0) _safeTransfer(_token1, to, amount1Out); // optimistically transfer tokens
-            if (data.length > 0)
-                ISwappiCallee(to).swappiCall(
-                    msg.sender,
-                    amount0Out,
-                    amount1Out,
-                    data
-                );
-            balance0 = IERC20(_token0).balanceOf(address(this));
-            balance1 = IERC20(_token1).balanceOf(address(this));
-        }
-        uint256 amount0In =
-            balance0 > _reserve0 - amount0Out
-                ? balance0 - (_reserve0 - amount0Out)
-                : 0;
-        uint256 amount1In =
-            balance1 > _reserve1 - amount1Out
-                ? balance1 - (_reserve1 - amount1Out)
-                : 0;
-        require(
-            amount0In > 0 || amount1In > 0,
-            "Swappi: INSUFFICIENT_INPUT_AMOUNT"
-        );
-        {
-            // scope for reserve{0,1}Adjusted, avoids stack too deep errors
-            uint256 balance0Adjusted =
-                (balance0.mul(10000).sub(amount0In.mul(3)));
-            uint256 balance1Adjusted =
-                (balance1.mul(10000).sub(amount1In.mul(3)));
-            // require(
-            //     balance0Adjusted.mul(balance1Adjusted) >=
-            //         uint256(_reserve0).mul(_reserve1).mul(10000**2),
-            //     "Swappi: K"
-            // );
-            require(
-                _k(balance0Adjusted, balance1Adjusted) >=
-                    _k(uint256(_reserve0).mul(10000),uint256(_reserve1).mul(10000)),
-                "Swappi: K"
-            );
-        }
+    //     uint256 balance0;
+    //     uint256 balance1;
+    //     {
+    //         // scope for _token{0,1}, avoids stack too deep errors
+    //         address _token0 = token0;
+    //         address _token1 = token1;
+    //         require(to != _token0 && to != _token1, "Swappi: INVALID_TO");
+    //         if (amount0Out > 0) _safeTransfer(_token0, to, amount0Out); // optimistically transfer tokens
+    //         if (amount1Out > 0) _safeTransfer(_token1, to, amount1Out); // optimistically transfer tokens
+    //         if (data.length > 0)
+    //             ISwappiCallee(to).swappiCall(
+    //                 msg.sender,
+    //                 amount0Out,
+    //                 amount1Out,
+    //                 data
+    //             );
+    //         balance0 = IERC20(_token0).balanceOf(address(this));
+    //         balance1 = IERC20(_token1).balanceOf(address(this));
+    //     }
+    //     uint256 amount0In =
+    //         balance0 > _reserve0 - amount0Out
+    //             ? balance0 - (_reserve0 - amount0Out)
+    //             : 0;
+    //     uint256 amount1In =
+    //         balance1 > _reserve1 - amount1Out
+    //             ? balance1 - (_reserve1 - amount1Out)
+    //             : 0;
+    //     require(
+    //         amount0In > 0 || amount1In > 0,
+    //         "Swappi: INSUFFICIENT_INPUT_AMOUNT"
+    //     );
+    //     {
+    //         // scope for reserve{0,1}Adjusted, avoids stack too deep errors
+    //         uint256 balance0Adjusted =
+    //             (balance0.mul(10000).sub(amount0In.mul(3)));
+    //         uint256 balance1Adjusted =
+    //             (balance1.mul(10000).sub(amount1In.mul(3)));
+    //         // require(
+    //         //     balance0Adjusted.mul(balance1Adjusted) >=
+    //         //         uint256(_reserve0).mul(_reserve1).mul(10000**2),
+    //         //     "Swappi: K"
+    //         // );
+    //         require(
+    //             _k(balance0Adjusted, balance1Adjusted) >=
+    //                 _k(uint256(_reserve0).mul(10000),uint256(_reserve1).mul(10000)),
+    //             "Swappi: K"
+    //         );
+    //     }
 
-        _update(balance0, balance1, _reserve0, _reserve1);
-        emit Swap(msg.sender, amount0In, amount1In, amount0Out, amount1Out, to);
-    }
+    //     _update(balance0, balance1, _reserve0, _reserve1);
+    //     emit Swap(msg.sender, amount0In, amount1In, amount0Out, amount1Out, to);
+    // }
 
     // force balances to match reserves
     function skim(address to) external lock {
