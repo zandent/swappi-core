@@ -34,8 +34,8 @@ contract SwappiPairWeighted is ISwappiPair, SwappiERC20 {
 
     // #############Weighted###########
     // 1e18 corresponds to 1.0, or a 100% fee
-    uint256 public swapFeePercentage = 3e10; // 0.03%
-    uint256 public protocolSwapFeePercentage = 1e10; //0.01%
+    uint256 public swapFeePercentage = 3e14; // 0.03%
+    uint256 public protocolSwapFeePercentage = 5e17; //50% * swapFeePercentage
     // All token balances are normalized to behave as if the token had 18 decimals. We assume a token's decimals will
     // not change throughout its lifetime, and store the corresponding scaling factor for each at construction time.
     // These factors are always greater than or equal to one: tokens with more than 18 decimals are not supported.
