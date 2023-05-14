@@ -34,8 +34,8 @@ contract SwappiPairWeighted is ISwappiPair, SwappiERC20 {
 
     // #############Weighted###########
     // 1e18 corresponds to 1.0, or a 100% fee
-    uint256 public swapFeePercentage = 3e14; // 0.03%
-    uint256 public protocolSwapFeePercentage = 5e17; //50% * swapFeePercentage
+    uint256 public swapFeePercentage = 25e14; // 0.25%
+    uint256 public protocolSwapFeePercentage = 32e16; //32% * swapFeePercentage
     // All token balances are normalized to behave as if the token had 18 decimals. We assume a token's decimals will
     // not change throughout its lifetime, and store the corresponding scaling factor for each at construction time.
     // These factors are always greater than or equal to one: tokens with more than 18 decimals are not supported.
@@ -1035,22 +1035,27 @@ contract SwappiPairWeighted is ISwappiPair, SwappiERC20 {
     //     _update(balance0, balance1, _reserve0, _reserve1);
     //     emit Swap(msg.sender, amount0In, amount1In, amount0Out, amount1Out, to);
     // }
-
-    // force balances to match reserves
-    function skim(address to) external lock {
-        address _token0 = token0; // gas savings
-        address _token1 = token1; // gas savings
-        _safeTransfer(
-            _token0,
-            to,
-            IERC20(_token0).balanceOf(address(this)).sub(reserve0)
-        );
-        _safeTransfer(
-            _token1,
-            to,
-            IERC20(_token1).balanceOf(address(this)).sub(reserve1)
-        );
+    function setNormalizedWeights(
+        uint256[] calldata normalizedWeights
+    ) external lock onlyVault {
+        _normalizedWeight0 = normalizedWeights[0];
+        _normalizedWeight1 = normalizedWeights[1];
     }
+    // // force balances to match reserves
+    // function skim(address to) external lock {
+    //     address _token0 = token0; // gas savings
+    //     address _token1 = token1; // gas savings
+    //     _safeTransfer(
+    //         _token0,
+    //         to,
+    //         IERC20(_token0).balanceOf(address(this)).sub(reserve0)
+    //     );
+    //     _safeTransfer(
+    //         _token1,
+    //         to,
+    //         IERC20(_token1).balanceOf(address(this)).sub(reserve1)
+    //     );
+    // }
 
     // force reserves to match balances
     function sync() external lock {
