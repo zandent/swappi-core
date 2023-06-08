@@ -20,6 +20,8 @@ contract SwappiPairStable is ISwappiPair, SwappiERC20 {
     address public factory;
     address public token0;
     address public token1;
+    uint public decimals0;
+    uint public decimals1;
 
     uint112 private reserve0; // uses single storage slot, accessible via getReserves
     uint112 private reserve1; // uses single storage slot, accessible via getReserves
@@ -90,6 +92,8 @@ contract SwappiPairStable is ISwappiPair, SwappiERC20 {
         require(msg.sender == factory, "Swappi: FORBIDDEN"); // sufficient check
         token0 = _token0;
         token1 = _token1;
+        decimals0 = 10 ** uint256(IERC20(token0).decimals());
+        decimals1 = 10 ** uint256(IERC20(token1).decimals());
     }
 
     // update reserves and, on the first call per block, price accumulators
@@ -120,9 +124,11 @@ contract SwappiPairStable is ISwappiPair, SwappiERC20 {
         emit Sync(reserve0, reserve1);
     }
     // formula of k
-    function _k(uint256 x, uint256 y) internal pure returns (uint) {
-        uint _a = x.mul(y).div(1e18);
-        uint _b = x.mul(x).div(1e18).add(y.mul(y).div(1e18));
+    function _k(uint256 x, uint256 y) internal view returns (uint) {
+        uint _x = x .mul(1e18).div(decimals0);
+        uint _y = y .mul(1e18).div(decimals1);
+        uint _a = _x.mul(_y).div(1e18);
+        uint _b = _x.mul(_x).div(1e18).add(_y.mul(_y).div(1e18));
         return _a.mul(_b).div(1e18);  // x3y+y3x >= k
     }
 
